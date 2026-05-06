@@ -65,22 +65,15 @@ async def _run_one(
         rec.rtt_s = time.monotonic() - t0
         rec.completed_at = time.time()
         rec.assistant_turns = extract_assistant_turns(resp)
-    except Exception as e:  # OpenCode interaction failure — record and return
-        rec.completed_at = time.time()
-        rec.error = f"{type(e).__name__}: {e}"
-        return rec
 
-    # Jaeger lookup is best-effort: a failure here must not erase the
-    # OpenCode session data we just collected. Record the lookup error
-    # separately so it's visible without poisoning the per-task record.
-    try:
         if jaeger_lookup_delay_s > 0:
             await asyncio.sleep(jaeger_lookup_delay_s)
         trace = await jg.get_trace(trace_id)
         if trace is not None:
             merge_timing(rec, aggregate_worker_timing(trace))
-    except Exception as e:
-        rec.jaeger_error = f"{type(e).__name__}: {e}"
+    except Exception as e:  # surface but don't kill the run
+        rec.completed_at = time.time()
+        rec.error = f"{type(e).__name__}: {e}"
     return rec
 
 
