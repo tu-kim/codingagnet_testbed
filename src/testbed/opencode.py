@@ -128,3 +128,26 @@ class OpenCodeClient:
         r = await self._http.get(f"/session/{session_id}", params=params)
         r.raise_for_status()
         return r.json()
+
+    async def list_messages(
+        self,
+        session_id: str,
+        *,
+        directory: Path | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """GET /session/:id/message → all messages including intermediate
+        assistant turns from the agent tool loop. The synchronous response of
+        POST /session/:id/message only contains the FINAL assistant message,
+        so this call is needed to recover per-step token usage / tool calls.
+        """
+        params: dict[str, Any] = {}
+        if directory is not None:
+            params["directory"] = str(directory)
+        if limit is not None:
+            params["limit"] = limit
+        r = await self._http.get(
+            f"/session/{session_id}/message", params=params or None
+        )
+        r.raise_for_status()
+        return r.json()

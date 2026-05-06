@@ -54,7 +54,7 @@ async def _run_one(
         rec.session_id = session_id
         prompt = render_prompt(sample)
         t0 = time.monotonic()
-        resp = await oc.send_message(
+        await oc.send_message(
             session_id,
             prompt,
             provider_id=provider_id,
@@ -64,7 +64,11 @@ async def _run_one(
         )
         rec.rtt_s = time.monotonic() - t0
         rec.completed_at = time.time()
-        rec.assistant_turns = extract_assistant_turns(resp)
+        # The synchronous POST /session/:id/message response only carries the
+        # FINAL assistant message. Fetch the full message list so we capture
+        # every step of the agent tool loop with its own token usage.
+        messages = await oc.list_messages(session_id, directory=workspace)
+        rec.assistant_turns = extract_assistant_turns(messages)
 
         if jaeger_lookup_delay_s > 0:
             await asyncio.sleep(jaeger_lookup_delay_s)

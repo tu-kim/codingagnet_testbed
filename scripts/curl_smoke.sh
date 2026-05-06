@@ -62,7 +62,13 @@ smoke_opencode() {
   curl -sS "${auth_args[@]}" -X POST \
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
     -H 'content-type: application/json' \
-    -d "$body" | jq .
+    -d "$body" | jq '.info // .'
+  echo
+  echo "==> all messages (per-step tokens / tool calls)"
+  curl -sS "${auth_args[@]}" \
+    "$OPENCODE_URL/session/$session/message?directory=$ws" \
+    | jq '[.[] | {role: .info.role, time: .info.time, tokens: .info.tokens,
+                  parts: [.parts[]? | {type, tool}]}]'
 }
 
 smoke_dynamo() {
@@ -152,7 +158,13 @@ PY
   curl -sS "${auth_args[@]}" -X POST \
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
     -H 'content-type: application/json' \
-    -d "$body" | jq .
+    -d "$body" | jq '.info // .'
+  echo
+  echo "==> all messages (per-step tokens / tool calls)"
+  curl -sS "${auth_args[@]}" \
+    "$OPENCODE_URL/session/$session/message?directory=$ws" \
+    | jq '[.[] | {role: .info.role, time: .info.time, tokens: .info.tokens,
+                  parts: [.parts[]? | {type, tool}]}]'
 }
 
 case "$cmd" in
