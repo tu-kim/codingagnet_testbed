@@ -37,8 +37,9 @@ start_one() {
   local kv_role
   if [[ "$role" == "prefill" ]]; then kv_role="kv_producer"; else kv_role="kv_consumer"; fi
 
-  # Per-slot ports — avoid collisions when multiple workers run on one host.
-  local port=$((9000 + rank))
+  # Per-slot NIXL side-channel port — defaults to 5600 in vLLM's NIXL
+  # connector, so multiple workers on one host collide. Assign a unique
+  # value per worker.
   local nixl_port=$((6000 + rank * 100))
 
   local kv_cfg
@@ -51,16 +52,17 @@ EOF
   local log="$RUN_DIR/${svc}.log"
   local pidf="$RUN_DIR/${svc}.pid"
 
-  echo "[start] $svc gpus=$gpus tp=$tp pp=$pp http=$port nixl_port=$nixl_port rank=$rank"
+  echo "[start] $svc role=$role gpus=$gpus tp=$tp pp=$pp nixl_port=$nixl_port rank=$rank"
   CUDA_VISIBLE_DEVICES="$gpus" \
   VLLM_NIXL_SIDE_CHANNEL_HOST=localhost \
   VLLM_NIXL_SIDE_CHANNEL_PORT="$nixl_port" \
   OTEL_SERVICE_NAME="$svc" \
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
   PYTHONHASHSEED=0 \
-  nohup vllm serve "$MODEL_NAME" \
-    --host 0.0.0.0 \
-    --port "$port" \
+  nohup python3 -m dynamo.vllm \
+    --model "$MODEL_NAME" \
+    --disaggregation-mode "$role" \
+    --discovery-backend file \
     --tensor-parallel-size "$tp" \
     --pipeline-parallel-size "$pp" \
     --otlp-traces-endpoint "$OTLP_GRPC_ENDPOINT" \

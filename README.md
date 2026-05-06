@@ -95,17 +95,22 @@ DECODE_WORKERS="d0:4:1:1  d1:5:1:1  d2:6:1:1"
 KV_CONNECTOR=NixlConnector
 ```
 
-`launch_workers.sh`는 슬롯을 순회하며 각 vLLM 프로세스에 다음을 부여한다:
+`launch_workers.sh`는 슬롯을 순회하며 각 워커를 `python3 -m dynamo.vllm`으로 띄운다 (vLLM을 직접
+`vllm serve`로 띄우면 Dynamo frontend의 file discovery에 등록되지 않아 frontend가 모든 요청에 404를
+반환함). 각 프로세스에 다음을 부여한다:
 - `CUDA_VISIBLE_DEVICES`
+- `--model` / `--disaggregation-mode prefill|decode` / `--discovery-backend file`
 - `--tensor-parallel-size` / `--pipeline-parallel-size`
-- `--port=$((9000 + rank))` — 외부 HTTP 포트 (slot마다 유니크)
 - `VLLM_NIXL_SIDE_CHANNEL_HOST=localhost` + `VLLM_NIXL_SIDE_CHANNEL_PORT=$((6000 + rank * 100))` —
   vLLM NIXL 커넥터의 side-channel 포트. 기본값(5600)이 워커가 여러 개일 때 충돌하므로
   슬롯마다 100 단위로 재할당.
 - `--kv-transfer-config`(`kv_role=kv_producer|kv_consumer`, `kv_rank=<slot index>`,
   `kv_parallel_size=<total slots>`, `kv_connector`)
 - `--otlp-traces-endpoint` + `OTEL_SERVICE_NAME=vllm-{prefill|decode}-<name>`
-- 슬롯의 `extra_args` (멀티노드 PP 인자, NIXL 사이드채널 포트 등은 여기서 지정)
+- 슬롯의 `extra_args` (멀티노드 PP 인자 등)
+
+`dynamo.vllm`은 자체 HTTP 서버를 띄우지 않는다. 클라이언트 트래픽은 frontend(`:8000`)로만 들어가고,
+워커는 discovery를 통해서만 frontend와 연결된다.
 
 토폴로지 변경은 `workers.env` 수정 + `make workers-down && make workers` 만으로 적용.
 
