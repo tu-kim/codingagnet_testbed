@@ -161,3 +161,16 @@ pytest -q
 ```
 
 단위 테스트는 외부 시스템(GPU·Dynamo·OpenCode·Jaeger) 없이 실행되도록 작성됨.
+
+## 단일 요청 스모크
+
+OpenCode·Dynamo가 떠있는지 빠르게 확인하려면:
+
+```bash
+scripts/curl_smoke.sh opencode    # 세션 생성 + 메시지 전송
+scripts/curl_smoke.sh dynamo      # Dynamo frontend /v1/chat/completions 직접
+scripts/curl_smoke.sh routes      # OpenCode /doc로 가용 엔드포인트 나열
+scripts/curl_smoke.sh all         # 셋 다 순서대로
+```
+`MODEL_NAME`이 `.env`에 설정돼 있어야 하고, OpenCode 서버 비밀번호를 쓰면
+`OPENCODE_SERVER_PASSWORD`로 자동 basic auth.
