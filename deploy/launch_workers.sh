@@ -39,6 +39,10 @@ start_one() {
 
   # Per-slot HTTP port (avoid collisions). Convention: 9000 + rank.
   local port=$((9000 + rank))
+  # Per-slot VLLM_PORT base — vLLM uses this as the first ZMQ/IPC port and
+  # increments from there. Must be unique per process; default 5600 collides
+  # when running multiple workers on one host.
+  local vllm_port_base=$((6000 + rank * 100))
 
   local kv_cfg
   kv_cfg=$(cat <<EOF
@@ -50,8 +54,9 @@ EOF
   local log="$RUN_DIR/${svc}.log"
   local pidf="$RUN_DIR/${svc}.pid"
 
-  echo "[start] $svc gpus=$gpus tp=$tp pp=$pp port=$port rank=$rank"
+  echo "[start] $svc gpus=$gpus tp=$tp pp=$pp http=$port vllm_port=$vllm_port_base rank=$rank"
   CUDA_VISIBLE_DEVICES="$gpus" \
+  VLLM_PORT="$vllm_port_base" \
   OTEL_SERVICE_NAME="$svc" \
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
   PYTHONHASHSEED=0 \

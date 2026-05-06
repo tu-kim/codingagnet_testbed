@@ -28,11 +28,15 @@ cp .env.example .env
 cp deploy/workers.env.example deploy/workers.env
 $EDITOR .env deploy/workers.env opencode.json    # MODEL_NAME 등 채우기
 
-make up           # etcd, NATS, otel-collector, jaeger
+make up           # NATS, otel-collector, jaeger (docker-compose)
 make workers      # workers.env 슬롯대로 prefill/decode vLLM 기동
-make frontend     # Dynamo OpenAI 호환 프런트엔드
+make frontend     # Dynamo OpenAI 호환 프런트엔드 (--discovery-backend file)
 make opencode     # OPENCODE_EXPERIMENTAL_WORKSPACES=true opencode serve
 make smoke N=5 QPS=0.2
+
+# 정리
+make kill-all     # opencode + frontend + workers 모두 종료
+make down         # 인프라 컨테이너 종료
 ```
 
 ## 설치
@@ -43,9 +47,9 @@ pip install -e '.[dev]'
 ```
 
 추가로 필요한 호스트 도구:
-- `docker compose` (인프라용)
-- `vllm` 0.17.1 (워커 호스트에 설치 또는 `vllm/vllm-openai:v0.17.1` 컨테이너로 실행)
-- `dynamo` Python 패키지 (frontend·worker용; NVIDIA Dynamo 설치 가이드 참고)
+- `docker-compose` (인프라용)
+- `vllm` 0.19.0 (Dynamo 1.1과 함께 동봉되는 버전; `vllm/vllm-openai:v0.19.0` 컨테이너 또는 직접 설치)
+- `dynamo` 1.1 Python 패키지 (frontend·worker용; NVIDIA Dynamo 설치 가이드 참고)
 - `opencode` CLI (`@sst/opencode`)
 
 ## 컴포넌트
@@ -90,6 +94,10 @@ KV_CONNECTOR=NixlConnector
 `launch_workers.sh`는 슬롯을 순회하며 각 vLLM 프로세스에 다음을 부여한다:
 - `CUDA_VISIBLE_DEVICES`
 - `--tensor-parallel-size` / `--pipeline-parallel-size`
+- `--port=$((9000 + rank))` — 외부 HTTP 포트 (slot마다 유니크)
+- `VLLM_PORT=$((6000 + rank * 100))` — vLLM 내부 ZMQ/IPC 베이스 포트. 기본값(5600)은 워커가
+  여러 개일 때 충돌하므로 슬롯마다 100 단위로 재할당. vLLM은 이 값에서 시작해 필요한 만큼
+  증가시키며 포트를 사용한다.
 - `--kv-transfer-config`(`kv_role=kv_producer|kv_consumer`, `kv_rank=<slot index>`,
   `kv_parallel_size=<total slots>`, `kv_connector`)
 - `--otlp-traces-endpoint` + `OTEL_SERVICE_NAME=vllm-{prefill|decode}-<name>`
@@ -125,7 +133,8 @@ make sweep ROUTERS="round-robin least-loaded kv" N=50 QPS=1.0
 5. **traceparent 전파**: OpenCode → Dynamo → vLLM 경로에서 W3C traceparent가 그대로 전파되는지
    설치 환경별로 검증 필요. 미전파 시 vLLM 워커 측 trace-id가 분리되어 prefill/decode 매칭이 실패할 수
    있다. fallback으로 prompt 내 unique tag 또는 provider 정적 헤더 옵션 사용 검토.
-6. vLLM은 v0.17.1을 가정. 다른 버전에서는 PD CLI 플래그/`--otlp-traces-endpoint` 동작이 다를 수 있음.
+6. vLLM은 Dynamo 1.1과 호환되는 v0.19.0을 가정. 다른 버전에서는 PD CLI 플래그·`--otlp-traces-endpoint`
+   동작이 다를 수 있음.
 7. SWE-bench 인스턴스의 실제 repo 체크아웃은 본 runner가 수행하지 않음 — workspace 디렉터리만 격리해
    에이전트가 그 안에서 `git clone` 등 도구를 호출하도록 둠.
 

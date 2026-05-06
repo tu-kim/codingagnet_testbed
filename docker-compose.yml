@@ -1,16 +1,4 @@
 services:
-  etcd:
-    image: quay.io/coreos/etcd:v3.5.13
-    command:
-      - etcd
-      - --advertise-client-urls=http://0.0.0.0:2379
-      - --listen-client-urls=http://0.0.0.0:2379
-      - --data-dir=/etcd-data
-    ports:
-      - "2379:2379"
-    volumes:
-      - etcd-data:/etcd-data
-
   nats:
     image: nats:2.10-alpine
     command: ["-js", "-m", "8222"]
@@ -36,6 +24,3 @@ services:
     ports:
       - "16686:16686"  # UI / Query API
       - "14250:14250"  # gRPC collector (used by otel-collector)
-
-volumes:
-  etcd-data:
