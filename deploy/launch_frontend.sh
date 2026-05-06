@@ -5,6 +5,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${WORKERS_ENV:-$ROOT/deploy/workers.env}"
+
+# shellcheck source=deploy/_lib.sh
+source "$ROOT/deploy/_lib.sh"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE" || true
 
 : "${ROUTER_MODE:=kv}"
@@ -22,32 +25,23 @@ cmd="${1:-start}"
 case "$cmd" in
   start)
     if [[ -f "$PIDF" ]] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
-      echo "[skip] frontend already running pid=$(cat "$PIDF")"
+      echo "[skip] frontend already running pgid=$(cat "$PIDF")"
       exit 0
     fi
     echo "[start] dynamo.frontend router=$ROUTER_MODE port=$DYNAMO_PORT discovery=$DISCOVERY_BACKEND"
-    PYTHONHASHSEED=0 \
-    OTEL_SERVICE_NAME="dynamo-frontend" \
-    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
-    nohup python3 -m dynamo.frontend \
-      --router-mode "$ROUTER_MODE" \
-      --http-port "$DYNAMO_PORT" \
-      --discovery-backend "$DISCOVERY_BACKEND" \
-      >"$LOG" 2>&1 &
-    echo $! > "$PIDF"
+    spawn_pgid "$PIDF" "$LOG" \
+      PYTHONHASHSEED=0 \
+      OTEL_SERVICE_NAME="dynamo-frontend" \
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
+      -- \
+      python3 -m dynamo.frontend \
+        --router-mode "$ROUTER_MODE" \
+        --http-port "$DYNAMO_PORT" \
+        --discovery-backend "$DISCOVERY_BACKEND"
     echo "log: $LOG"
     ;;
   stop)
-    if [[ -f "$PIDF" ]]; then
-      pid=$(cat "$PIDF")
-      if kill -0 "$pid" 2>/dev/null; then
-        echo "[stop] dynamo.frontend pid=$pid"
-        kill "$pid" || true
-      fi
-      rm -f "$PIDF"
-    else
-      echo "[skip] no frontend.pid"
-    fi
+    stop_pgid "$PIDF" dynamo-frontend
     ;;
   *)
     echo "usage: $0 {start|stop}" >&2

@@ -8,6 +8,9 @@ ENV_FILE="${WORKERS_ENV:-$ROOT/deploy/workers.env}"
 RUN_DIR="$ROOT/deploy/run"
 mkdir -p "$RUN_DIR"
 
+# shellcheck source=deploy/_lib.sh
+source "$ROOT/deploy/_lib.sh"
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "missing $ENV_FILE (copy from workers.env.example)" >&2
   exit 1
@@ -55,33 +58,27 @@ EOF
   local pidf="$RUN_DIR/${svc}.pid"
 
   echo "[start] $svc gpus=$gpus tp=$tp pp=$pp http=$port vllm_port=$vllm_port_base rank=$rank"
-  CUDA_VISIBLE_DEVICES="$gpus" \
-  VLLM_PORT="$vllm_port_base" \
-  OTEL_SERVICE_NAME="$svc" \
-  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
-  PYTHONHASHSEED=0 \
-  nohup vllm serve "$MODEL_NAME" \
-    --host 0.0.0.0 \
-    --port "$port" \
-    --tensor-parallel-size "$tp" \
-    --pipeline-parallel-size "$pp" \
-    --otlp-traces-endpoint "$OTLP_GRPC_ENDPOINT" \
-    --kv-transfer-config "$kv_cfg" \
-    $EXTRA_VLLM_ARGS \
-    $extra \
-    >"$log" 2>&1 &
-  echo $! > "$pidf"
+  # shellcheck disable=SC2086 # we want word-splitting on $EXTRA_VLLM_ARGS / $extra
+  spawn_pgid "$pidf" "$log" \
+    CUDA_VISIBLE_DEVICES="$gpus" \
+    VLLM_PORT="$vllm_port_base" \
+    OTEL_SERVICE_NAME="$svc" \
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
+    PYTHONHASHSEED=0 \
+    -- \
+    bash -c "exec vllm serve \"\$0\" \
+      --host 0.0.0.0 --port \"\$1\" \
+      --tensor-parallel-size \"\$2\" --pipeline-parallel-size \"\$3\" \
+      --otlp-traces-endpoint \"\$4\" \
+      --kv-transfer-config \"\$5\" \
+      $EXTRA_VLLM_ARGS $extra" \
+    "$MODEL_NAME" "$port" "$tp" "$pp" "$OTLP_GRPC_ENDPOINT" "$kv_cfg"
 }
 
 stop_all() {
   shopt -s nullglob
-  for pidf in "$RUN_DIR"/*.pid; do
-    pid=$(cat "$pidf" 2>/dev/null || true)
-    if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
-      echo "[stop] $(basename "$pidf" .pid) pid=$pid"
-      kill "$pid" || true
-    fi
-    rm -f "$pidf"
+  for pidf in "$RUN_DIR"/vllm-*.pid; do
+    stop_pgid "$pidf" "$(basename "$pidf" .pid)"
   done
 }
 

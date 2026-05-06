@@ -5,13 +5,13 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Local Dynamo",
       "options": {
-        "baseURL": "{env:DYNAMO_BASE_URL}",
-        "apiKey": "{env:DYNAMO_API_KEY}"
+        "baseURL": "${DYNAMO_BASE_URL}",
+        "apiKey": "${DYNAMO_API_KEY}"
       },
       "models": {
-        "{env:MODEL_NAME}": { "name": "Local model via Dynamo" }
+        "${MODEL_NAME}": { "name": "Local model via Dynamo" }
       }
     }
   },
-  "model": "local/{env:MODEL_NAME}"
+  "model": "local/${MODEL_NAME}"
 }

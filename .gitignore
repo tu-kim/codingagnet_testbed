@@ -4,6 +4,7 @@ __pycache__/
 .env
 deploy/workers.env
 deploy/run/
+opencode.json
 results/*
 !results/.gitkeep
 *.egg-info/

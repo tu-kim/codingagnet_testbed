@@ -26,18 +26,22 @@ span의 총 duration으로 계산한다 (`src/testbed/jaeger.py`).
 ```bash
 cp .env.example .env
 cp deploy/workers.env.example deploy/workers.env
-$EDITOR .env deploy/workers.env opencode.json    # MODEL_NAME 등 채우기
+$EDITOR .env deploy/workers.env                   # MODEL_NAME 등 채우기
 
 make up           # NATS, otel-collector, jaeger (docker-compose)
 make workers      # workers.env 슬롯대로 prefill/decode vLLM 기동
 make frontend     # Dynamo OpenAI 호환 프런트엔드 (--discovery-backend file)
-make opencode     # OPENCODE_EXPERIMENTAL_WORKSPACES=true opencode serve
+make opencode     # opencode.json을 .env 값으로 렌더링 후 serve
 make smoke N=5 QPS=0.2
 
-# 정리
+# 정리 (자식 프로세스까지 SIGTERM → 유예 후 SIGKILL)
 make kill-all     # opencode + frontend + workers 모두 종료
 make down         # 인프라 컨테이너 종료
 ```
+
+`opencode.json`은 `opencode.json.tmpl`을 `.env`의 `MODEL_NAME`/`DYNAMO_BASE_URL`/`DYNAMO_API_KEY`로
+`envsubst` 렌더링한 결과물이다 (`make opencode` 시 자동, 또는 `bash deploy/launch_opencode.sh render`).
+opencode가 `models` 객체 키에서는 `{env:VAR}` interpolation을 지원하지 않기 때문에 템플릿 단계에서 치환한다.
 
 ## 설치
 
