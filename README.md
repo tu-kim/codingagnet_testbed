@@ -99,9 +99,9 @@ KV_CONNECTOR=NixlConnector
 - `CUDA_VISIBLE_DEVICES`
 - `--tensor-parallel-size` / `--pipeline-parallel-size`
 - `--port=$((9000 + rank))` — 외부 HTTP 포트 (slot마다 유니크)
-- `VLLM_PORT=$((6000 + rank * 100))` — vLLM 내부 ZMQ/IPC 베이스 포트. 기본값(5600)은 워커가
-  여러 개일 때 충돌하므로 슬롯마다 100 단위로 재할당. vLLM은 이 값에서 시작해 필요한 만큼
-  증가시키며 포트를 사용한다.
+- `VLLM_NIXL_SIDE_CHANNEL_HOST=localhost` + `VLLM_NIXL_SIDE_CHANNEL_PORT=$((6000 + rank * 100))` —
+  vLLM NIXL 커넥터의 side-channel 포트. 기본값(5600)이 워커가 여러 개일 때 충돌하므로
+  슬롯마다 100 단위로 재할당.
 - `--kv-transfer-config`(`kv_role=kv_producer|kv_consumer`, `kv_rank=<slot index>`,
   `kv_parallel_size=<total slots>`, `kv_connector`)
 - `--otlp-traces-endpoint` + `OTEL_SERVICE_NAME=vllm-{prefill|decode}-<name>`
