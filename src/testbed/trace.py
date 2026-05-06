@@ -48,6 +48,7 @@ class TaskRecord:
     prefill_spans: int = 0
     decode_spans: int = 0
     error: str | None = None
+    jaeger_error: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         d = asdict(self)
