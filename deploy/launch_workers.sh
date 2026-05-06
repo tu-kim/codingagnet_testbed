@@ -20,6 +20,16 @@ source "$ENV_FILE"
 # OTLP/HTTP — vLLM/dynamo's OTLP gRPC export does not work reliably against
 # our otel-collector receiver, so we route over HTTP/protobuf to :4318/v1/traces.
 : "${OTLP_HTTP_ENDPOINT:=http://127.0.0.1:4318/v1/traces}"
+
+# Per-role engine tunables — prefill and decode often want very different
+# scheduling/batching, so they're split. Override in workers.env.
+: "${PREFILL_MAX_MODEL_LEN:=131072}"
+: "${PREFILL_MAX_NUM_BATCHED_TOKENS:=32768}"
+: "${PREFILL_MAX_NUM_SEQS:=32}"
+: "${DECODE_MAX_MODEL_LEN:=131072}"
+: "${DECODE_MAX_NUM_BATCHED_TOKENS:=32768}"
+: "${DECODE_MAX_NUM_SEQS:=32}"
+
 EXTRA_VLLM_ARGS="${EXTRA_VLLM_ARGS:-}"
 
 cmd="${1:-start}"
@@ -36,8 +46,18 @@ start_one() {
   : "${name:?slot missing name}" "${gpus:?slot missing gpus}" "${tp:?slot missing tp}" "${pp:?slot missing pp}"
   extra="${extra//%20/ }"
 
-  local kv_role
-  if [[ "$role" == "prefill" ]]; then kv_role="kv_producer"; else kv_role="kv_consumer"; fi
+  local kv_role max_model_len max_batched_tokens max_num_seqs
+  if [[ "$role" == "prefill" ]]; then
+    kv_role="kv_producer"
+    max_model_len="$PREFILL_MAX_MODEL_LEN"
+    max_batched_tokens="$PREFILL_MAX_NUM_BATCHED_TOKENS"
+    max_num_seqs="$PREFILL_MAX_NUM_SEQS"
+  else
+    kv_role="kv_consumer"
+    max_model_len="$DECODE_MAX_MODEL_LEN"
+    max_batched_tokens="$DECODE_MAX_NUM_BATCHED_TOKENS"
+    max_num_seqs="$DECODE_MAX_NUM_SEQS"
+  fi
 
   # Per-slot NIXL side-channel port — defaults to 5600 in vLLM's NIXL
   # connector, so multiple workers on one host collide. Assign a unique
@@ -54,7 +74,8 @@ EOF
   local log="$RUN_DIR/${svc}.log"
   local pidf="$RUN_DIR/${svc}.pid"
 
-  echo "[start] $svc role=$role gpus=$gpus tp=$tp pp=$pp nixl_port=$nixl_port rank=$rank"
+  echo "[start] $svc role=$role gpus=$gpus tp=$tp pp=$pp nixl_port=$nixl_port rank=$rank \
+max_model_len=$max_model_len max_batched=$max_batched_tokens max_seqs=$max_num_seqs"
   CUDA_VISIBLE_DEVICES="$gpus" \
   VLLM_NIXL_SIDE_CHANNEL_HOST=localhost \
   VLLM_NIXL_SIDE_CHANNEL_PORT="$nixl_port" \
@@ -70,6 +91,13 @@ EOF
     --pipeline-parallel-size "$pp" \
     --otlp-traces-endpoint "$OTLP_HTTP_ENDPOINT" \
     --kv-transfer-config "$kv_cfg" \
+    --collect-detailed-traces all \
+    --gpu-memory-utilization 0.9 \
+    --reasoning-parser qwen3 \
+    --dyn-tool-call-parser qwen3_coder \
+    --max-model-len "$max_model_len" \
+    --max-num-batched-tokens "$max_batched_tokens" \
+    --max-num-seqs "$max_num_seqs" \
     $EXTRA_VLLM_ARGS \
     $extra \
     >"$log" 2>&1 &

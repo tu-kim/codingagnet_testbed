@@ -107,6 +107,12 @@ KV_CONNECTOR=NixlConnector
 - `--kv-transfer-config`(`kv_role=kv_producer|kv_consumer`, `kv_rank=<slot index>`,
   `kv_parallel_size=<total slots>`, `kv_connector`)
 - `--otlp-traces-endpoint` + `OTEL_SERVICE_NAME=vllm-{prefill|decode}-<name>`
+- Qwen3 고정 플래그: `--collect-detailed-traces all`, `--gpu-memory-utilization 0.9`,
+  `--reasoning-parser qwen3`, `--dyn-tool-call-parser qwen3_coder`
+- per-role 튜너블 (workers.env에서 prefill/decode 별도 설정):
+  `PREFILL_MAX_MODEL_LEN` / `DECODE_MAX_MODEL_LEN` → `--max-model-len`
+  `PREFILL_MAX_NUM_BATCHED_TOKENS` / `DECODE_MAX_NUM_BATCHED_TOKENS` → `--max-num-batched-tokens`
+  `PREFILL_MAX_NUM_SEQS` / `DECODE_MAX_NUM_SEQS` → `--max-num-seqs`
 - 슬롯의 `extra_args` (멀티노드 PP 인자 등)
 
 `dynamo.vllm`은 자체 HTTP 서버를 띄우지 않는다. 클라이언트 트래픽은 frontend(`:8000`)로만 들어가고,
