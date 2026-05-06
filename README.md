@@ -170,7 +170,13 @@ OpenCode·Dynamo가 떠있는지 빠르게 확인하려면:
 scripts/curl_smoke.sh opencode    # 세션 생성 + 메시지 전송
 scripts/curl_smoke.sh dynamo      # Dynamo frontend /v1/chat/completions 직접
 scripts/curl_smoke.sh routes      # OpenCode /doc로 가용 엔드포인트 나열
-scripts/curl_smoke.sh all         # 셋 다 순서대로
+scripts/curl_smoke.sh swebench    # 실제 SWE-bench 인스턴스 prompt를 그대로 전송
+scripts/curl_smoke.sh all         # opencode + dynamo + routes 순서대로
 ```
 `MODEL_NAME`이 `.env`에 설정돼 있어야 하고, OpenCode 서버 비밀번호를 쓰면
 `OPENCODE_SERVER_PASSWORD`로 자동 basic auth.
+
+`swebench` 서브커맨드는 runner.py와 동일하게 `princeton-nlp/SWE-bench_Lite` (또는
+`SWE_SPLIT`로 verified/full)에서 `SWE_INDEX`번째 샘플을 로드해 동일 프롬프트를 전송합니다.
+git 단계가 hang의 원인인지 격리하려면 `SEED_REPO=1`로 워크스페이스에 repo를 미리 clone+
+checkout해놓고 전송 — 이 모드에서 응답이 정상이면 hang은 모델/agent의 git 명령에서 발생.
