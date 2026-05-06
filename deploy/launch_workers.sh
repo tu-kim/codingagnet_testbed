@@ -17,7 +17,9 @@ source "$ENV_FILE"
 
 : "${MODEL_NAME:?MODEL_NAME required in $ENV_FILE}"
 : "${KV_CONNECTOR:?KV_CONNECTOR required}"
-: "${OTLP_GRPC_ENDPOINT:=grpc://127.0.0.1:4317}"
+# OTLP/HTTP — vLLM/dynamo's OTLP gRPC export does not work reliably against
+# our otel-collector receiver, so we route over HTTP/protobuf to :4318/v1/traces.
+: "${OTLP_HTTP_ENDPOINT:=http://127.0.0.1:4318/v1/traces}"
 EXTRA_VLLM_ARGS="${EXTRA_VLLM_ARGS:-}"
 
 cmd="${1:-start}"
@@ -57,7 +59,8 @@ EOF
   VLLM_NIXL_SIDE_CHANNEL_HOST=localhost \
   VLLM_NIXL_SIDE_CHANNEL_PORT="$nixl_port" \
   OTEL_SERVICE_NAME="$svc" \
-  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_HTTP_ENDPOINT" \
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf \
   PYTHONHASHSEED=0 \
   nohup python3 -m dynamo.vllm \
     --model "$MODEL_NAME" \
@@ -65,7 +68,7 @@ EOF
     --discovery-backend file \
     --tensor-parallel-size "$tp" \
     --pipeline-parallel-size "$pp" \
-    --otlp-traces-endpoint "$OTLP_GRPC_ENDPOINT" \
+    --otlp-traces-endpoint "$OTLP_HTTP_ENDPOINT" \
     --kv-transfer-config "$kv_cfg" \
     $EXTRA_VLLM_ARGS \
     $extra \

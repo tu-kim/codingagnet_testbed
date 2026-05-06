@@ -13,7 +13,7 @@ source "$ROOT/deploy/_lib.sh"
 : "${ROUTER_MODE:=kv}"
 : "${DYNAMO_PORT:=8000}"
 : "${DISCOVERY_BACKEND:=file}"
-: "${OTLP_GRPC_ENDPOINT:=grpc://127.0.0.1:4317}"
+: "${OTLP_HTTP_ENDPOINT:=http://127.0.0.1:4318/v1/traces}"
 
 RUN_DIR="$ROOT/deploy/run"
 PIDF="$RUN_DIR/frontend.pid"
@@ -32,7 +32,8 @@ case "$cmd" in
     spawn_pgid "$PIDF" "$LOG" \
       PYTHONHASHSEED=0 \
       OTEL_SERVICE_NAME="dynamo-frontend" \
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_GRPC_ENDPOINT" \
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTLP_HTTP_ENDPOINT" \
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf \
       -- \
       python3 -m dynamo.frontend \
         --router-mode "$ROUTER_MODE" \
