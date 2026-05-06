@@ -1,9 +1,14 @@
 """OpenCode HTTP client.
 
-We deliberately keep the wire layer thin and pass through opaque payloads:
-the exact field names for the workspace key and the message-part shape are
-defined by ``@opencode-ai/sdk`` types.gen.ts; we forward whatever the caller
-provides without inventing missing fields.
+Endpoint shapes verified against @opencode-ai/sdk types.gen.ts:
+  POST /session?directory=<ws>           body: { parentID?, title? }
+  POST /session/{id}/message?directory=<ws>
+       body: { parts, model?: {providerID, modelID}, agent?, system?, tools?, noReply? }
+  GET  /event                            (SSE)
+
+The workspace path is carried in the ``directory`` query parameter (enabled
+when the server runs with OPENCODE_EXPERIMENTAL_WORKSPACES=true). The model
+is an object, not a "provider/model" string.
 """
 from __future__ import annotations
 
@@ -51,18 +56,18 @@ class OpenCodeClient:
     async def create_session(
         self,
         *,
-        workspace: Path | None = None,
-        workspace_field: str = "workspace",
+        directory: Path | None = None,
         title: str | None = None,
         traceparent: str | None = None,
     ) -> str:
         body: dict[str, Any] = {}
         if title:
             body["title"] = title
-        if workspace is not None:
-            body[workspace_field] = str(workspace)
+        params = {"directory": str(directory)} if directory is not None else None
         headers = {"traceparent": traceparent} if traceparent else None
-        r = await self._http.post("/session", json=body, headers=headers)
+        r = await self._http.post(
+            "/session", json=body, params=params, headers=headers
+        )
         r.raise_for_status()
         return r.json()["id"]
 
@@ -71,16 +76,22 @@ class OpenCodeClient:
         session_id: str,
         prompt: str,
         *,
-        model: str,
+        provider_id: str,
+        model_id: str,
+        directory: Path | None = None,
         traceparent: str | None = None,
     ) -> dict[str, Any]:
-        body = {
-            "model": model,
+        body: dict[str, Any] = {
+            "model": {"providerID": provider_id, "modelID": model_id},
             "parts": [{"type": "text", "text": prompt}],
         }
+        params = {"directory": str(directory)} if directory is not None else None
         headers = {"traceparent": traceparent} if traceparent else None
         r = await self._http.post(
-            f"/session/{session_id}/message", json=body, headers=headers
+            f"/session/{session_id}/message",
+            json=body,
+            params=params,
+            headers=headers,
         )
         r.raise_for_status()
         return r.json()
@@ -110,9 +121,10 @@ class OpenCodeClient:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
 
-    async def export_session(self, session_id: str) -> dict[str, Any]:
-        """Best-effort: fetch full session via GET /session/:id; the exact
-        representation is server-defined."""
-        r = await self._http.get(f"/session/{session_id}")
+    async def get_session(
+        self, session_id: str, *, directory: Path | None = None
+    ) -> dict[str, Any]:
+        params = {"directory": str(directory)} if directory is not None else None
+        r = await self._http.get(f"/session/{session_id}", params=params)
         r.raise_for_status()
         return r.json()

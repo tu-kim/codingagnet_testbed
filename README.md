@@ -127,9 +127,10 @@ make sweep ROUTERS="round-robin least-loaded kv" N=50 QPS=1.0
 1. GPU 토폴로지·NIXL 사이드채널·KV connector 선택은 운영 환경 의존 → `workers.env`에서 외부화.
 2. 모델/토크나이저는 placeholder. `MODEL_NAME` 미설정 시 모든 launcher가 실패함.
 3. SWE-bench 정답 채점(테스트 패치 적용)은 본 testbed 범위 밖 — workload 생성·계측에 집중.
-4. **OpenCode workspace 필드명**: `OPENCODE_EXPERIMENTAL_WORKSPACES=true`에서 세션 생성 페이로드의
-   workspace 키 이름은 `@opencode-ai/sdk` types.gen.ts에서 직접 확인이 필요. 기본은 `workspace`이며
-   `--workspace-field cwd|directory` 등으로 재정의 가능.
+4. **OpenCode workspace API**: `OPENCODE_EXPERIMENTAL_WORKSPACES=true`일 때 workspace 경로는
+   세션 생성·메시지 전송 모두에서 `?directory=<path>` query parameter로 전달한다
+   (`@opencode-ai/sdk` types.gen.ts의 `SessionCreateData` / `SessionPromptData` 검증).
+   message 본문의 `model`은 문자열이 아니라 `{providerID, modelID}` 객체.
 5. **traceparent 전파**: OpenCode → Dynamo → vLLM 경로에서 W3C traceparent가 그대로 전파되는지
    설치 환경별로 검증 필요. 미전파 시 vLLM 워커 측 trace-id가 분리되어 prefill/decode 매칭이 실패할 수
    있다. fallback으로 prompt 내 unique tag 또는 provider 정적 헤더 옵션 사용 검토.

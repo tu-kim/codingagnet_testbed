@@ -28,7 +28,7 @@ async def _run_one(
     oc: OpenCodeClient,
     jg: JaegerClient,
     workspace_root: Path,
-    workspace_field: str,
+    provider_id: str,
     jaeger_lookup_delay_s: float,
 ) -> TaskRecord:
     workspace = workspace_root / f"{sample.instance_id}-{uuid.uuid4().hex[:8]}"
@@ -47,8 +47,7 @@ async def _run_one(
     )
     try:
         session_id = await oc.create_session(
-            workspace=workspace,
-            workspace_field=workspace_field,
+            directory=workspace,
             title=sample.instance_id,
             traceparent=traceparent,
         )
@@ -58,7 +57,9 @@ async def _run_one(
         resp = await oc.send_message(
             session_id,
             prompt,
-            model=f"local/{settings.model_name}",
+            provider_id=provider_id,
+            model_id=settings.model_name,
+            directory=workspace,
             traceparent=traceparent,
         )
         rec.rtt_s = time.monotonic() - t0
@@ -84,7 +85,7 @@ async def run(
     seed: int,
     out_dir: Path,
     settings: Settings,
-    workspace_field: str = "workspace",
+    provider_id: str = "local",
     jaeger_lookup_delay_s: float = 2.0,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -108,7 +109,7 @@ async def run(
                     oc=oc,
                     jg=jg,
                     workspace_root=workspace_root,
-                    workspace_field=workspace_field,
+                    provider_id=provider_id,
                     jaeger_lookup_delay_s=jaeger_lookup_delay_s,
                 )
             )

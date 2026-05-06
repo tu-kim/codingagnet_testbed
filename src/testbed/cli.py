@@ -23,11 +23,11 @@ def main() -> None:
 @click.option("--router", default="kv", show_default=True,
               help="Recorded into summary.json; actual router mode is set by deploy/launch_frontend.sh")
 @click.option("--out", "out_dir", type=click.Path(path_type=Path), required=True)
-@click.option("--workspace-field", default="workspace", show_default=True,
-              help="Session-create payload field that carries the workspace path")
+@click.option("--provider-id", default="local", show_default=True,
+              help="OpenCode providerID (must match a key in opencode.json)")
 @click.option("--jaeger-lookup-delay", default=2.0, show_default=True,
               help="Seconds to wait before querying Jaeger so spans are flushed")
-def run(split, num_samples, qps, seed, router, out_dir, workspace_field, jaeger_lookup_delay):
+def run(split, num_samples, qps, seed, router, out_dir, provider_id, jaeger_lookup_delay):
     """Run a Poisson workload of SWE-bench samples through OpenCode."""
     settings = Settings()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -42,7 +42,7 @@ def run(split, num_samples, qps, seed, router, out_dir, workspace_field, jaeger_
         seed=seed,
         out_dir=out_dir,
         settings=settings,
-        workspace_field=workspace_field,
+        provider_id=provider_id,
         jaeger_lookup_delay_s=jaeger_lookup_delay,
     ))
     click.echo((out_dir / "summary.json").read_text())
