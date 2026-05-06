@@ -42,6 +42,7 @@ case "$cmd" in
     ;;
   stop)
     stop_pgid "$PIDF" dynamo-frontend
+    kill_port "$DYNAMO_PORT" dynamo-frontend
     ;;
   *)
     echo "usage: $0 {start|stop}" >&2

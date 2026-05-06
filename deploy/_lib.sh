@@ -50,3 +50,34 @@ stop_pgid() {
   echo "[stop] $label still alive after 10s; SIGKILL group"
   kill -KILL -- "-$pgid" 2>/dev/null || true
 }
+
+# kill_port <port> [label]
+# Reaps any process still bound to <port>/tcp, even if it escaped our process
+# group (e.g. opencode's detached `.opencode` worker that calls setsid()).
+# Tries fuser → lsof → ss; whichever is available.
+kill_port() {
+  local port="$1" label="${2:-port-$1}"
+  local pids=""
+  if command -v fuser >/dev/null 2>&1; then
+    pids=$(fuser -n tcp "$port" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' || true)
+  elif command -v lsof >/dev/null 2>&1; then
+    pids=$(lsof -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  elif command -v ss >/dev/null 2>&1; then
+    pids=$(ss -ltnp "sport = :$port" 2>/dev/null \
+      | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u || true)
+  fi
+  [[ -z "$pids" ]] && return 0
+  echo "[stop] $label residual on :$port → killing pids: $(echo "$pids" | tr '\n' ' ')"
+  # shellcheck disable=SC2086
+  kill -TERM $pids 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    local alive=""
+    for p in $pids; do
+      kill -0 "$p" 2>/dev/null && alive="$alive $p"
+    done
+    [[ -z "$alive" ]] && return 0
+    sleep 0.25
+  done
+  # shellcheck disable=SC2086
+  kill -KILL $pids 2>/dev/null || true
+}

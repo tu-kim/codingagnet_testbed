@@ -81,6 +81,14 @@ stop_all() {
   for pidf in "$RUN_DIR"/vllm-*.pid; do
     stop_pgid "$pidf" "$(basename "$pidf" .pid)"
   done
+  # backstop: vLLM workers spawn helper subprocesses (e.g. multiproc executor)
+  # that may detach. Sweep each slot's known HTTP and NIXL side-channel ports.
+  local rank=0
+  for entry in "${all_slots[@]}"; do
+    kill_port "$((9000 + rank))" "vllm-rank-$rank"
+    kill_port "$((6000 + rank * 100))" "vllm-rank-$rank-nixl"
+    rank=$((rank + 1))
+  done
 }
 
 case "$cmd" in

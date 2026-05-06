@@ -55,6 +55,10 @@ case "$cmd" in
     ;;
   stop)
     stop_pgid "$PIDF" opencode
+    # opencode CLI spawns a `.opencode` worker that detaches into its own
+    # session, so PGID-based kill misses it. Sweep anything still bound to
+    # the configured port as a backstop.
+    kill_port "$OPENCODE_PORT" opencode
     ;;
   render)
     render_config
