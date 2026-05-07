@@ -17,7 +17,12 @@ from .jaeger import JaegerClient, aggregate_worker_timing
 from .opencode import OpenCodeClient, gen_traceparent
 from .poisson import arrivals
 from .swebench import Sample, load_samples, render_prompt
-from .trace import TaskRecord, extract_assistant_turns, merge_timing
+from .trace import (
+    TaskRecord,
+    extract_assistant_turns,
+    extract_user_messages,
+    merge_timing,
+)
 
 
 async def _run_one(
@@ -68,6 +73,7 @@ async def _run_one(
         # FINAL assistant message. Fetch the full message list so we capture
         # every step of the agent tool loop with its own token usage.
         messages = await oc.list_messages(session_id, directory=workspace)
+        rec.user_messages = extract_user_messages(messages)
         rec.assistant_turns = extract_assistant_turns(messages)
 
         if jaeger_lookup_delay_s > 0:
