@@ -64,28 +64,47 @@ def _read_messages(stream) -> object:
     return json.loads(raw)
 
 
+def _parse_sample(sample_json: str | None) -> dict | None:
+    if not sample_json:
+        return None
+    try:
+        return json.loads(sample_json)
+    except json.JSONDecodeError as e:
+        raise click.ClickException(f"--sample is not valid JSON: {e}") from e
+
+
 @main.command(name="render-iterations")
 @click.option("-i", "--input", "in_path", type=click.Path(exists=True, path_type=Path),
               default=None, help="Read messages JSON from file (default: stdin)")
-def render_iterations(in_path):
+@click.option("--sample", "sample_json", default=None,
+              help='JSON string embedded under .sample (e.g. {"instance_id":"x","repo":"y"})')
+def render_iterations(in_path, sample_json):
     """Read OpenCode messages JSON (from GET /session/:id/message) on stdin
     and emit the per-iteration token / duration distribution view."""
     messages = (
         json.loads(in_path.read_text()) if in_path else _read_messages(sys.stdin)
     )
-    click.echo(json.dumps(build_iteration_summary(messages), indent=2))
+    click.echo(json.dumps(
+        build_iteration_summary(messages, _parse_sample(sample_json)),
+        indent=2,
+    ))
 
 
 @main.command(name="render-transcript")
 @click.option("-i", "--input", "in_path", type=click.Path(exists=True, path_type=Path),
               default=None, help="Read messages JSON from file (default: stdin)")
-def render_transcript(in_path):
+@click.option("--sample", "sample_json", default=None,
+              help='JSON string embedded under .sample')
+def render_transcript(in_path, sample_json):
     """Read OpenCode messages JSON on stdin and emit the per-iteration
     raw input/output text trace."""
     messages = (
         json.loads(in_path.read_text()) if in_path else _read_messages(sys.stdin)
     )
-    click.echo(json.dumps(build_iteration_transcript(messages), indent=2))
+    click.echo(json.dumps(
+        build_iteration_transcript(messages, _parse_sample(sample_json)),
+        indent=2,
+    ))
 
 
 if __name__ == "__main__":

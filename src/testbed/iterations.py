@@ -155,14 +155,18 @@ def build_iteration_summary(
         text_start, text_end = _time_range(step_parts, ("text", "reasoning"))
         all_start, all_end = _time_range(step_parts, ("text", "reasoning", "tool"))
         llm_duration = (text_end - text_start) if (text_start is not None and text_end is not None) else None
-        total_duration = (all_end - all_start) if (all_start is not None and all_end is not None) else None
+        total_latency = (all_end - all_start) if (all_start is not None and all_end is not None) else None
 
         items: list[dict] = []
-        # One LLM emission entry per step (text + reasoning collapsed)
+        # One LLM emission entry per step (text + reasoning collapsed).
+        # vLLM's --reasoning-parser surfaces <think> content separately, but
+        # the OpenAI-compatible usage.completion_tokens still counts every
+        # generated token (reasoning + final answer). We don't expose a
+        # separate `reasoning_tokens` field because OpenCode reports it as
+        # 0 in that path — the reasoning is already inside `output_tokens`.
         items.append({
             "type": "text",
             "output_tokens": tokens.get("output"),
-            "reasoning_tokens": tokens.get("reasoning"),
             "llm_duration_ms": llm_duration,
         })
         # One entry per tool call
@@ -184,6 +188,16 @@ def build_iteration_summary(
             "session_id": session_id,
             "started_at": all_start,
             "completed_at": all_end,
+            # Wall-clock latency for this iteration (= completed_at - started_at).
+            # Note this is min(starts)..max(ends) over all parts, so it can be
+            # SMALLER than the sum of per-part llm/tool durations whenever the
+            # parts overlap in time (e.g. a tool starts running while the LLM
+            # is still streaming, or two tools execute in parallel within the
+            # same step). It can also be LARGER if there is a gap between the
+            # LLM emission and tool execution (e.g. waiting for I/O), which we
+            # count toward wall-clock but not toward llm_duration_ms or
+            # tool_duration_ms.
+            "total_latency_ms": total_latency,
             "input": {
                 "token_count": tokens.get("input"),
                 "roles": _conversation_roles(steps, idx),
@@ -193,7 +207,6 @@ def build_iteration_summary(
                     "read": cache.get("read"),
                     "write": cache.get("write"),
                 },
-                "total_duration_ms": total_duration,
                 "items": items,
             },
         })

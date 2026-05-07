@@ -68,14 +68,14 @@ def test_summary_has_two_iterations_with_tokens_and_durations():
     assert it1["input"]["token_count"] == 100
     # First step sees just system + user.
     assert it1["input"]["roles"] == ["system", "user"]
+    # total_latency_ms is now at iteration level (= completed - started).
+    assert abs(it1["total_latency_ms"] - (102.2 - 101.1)) < 1e-9
     assert it1["output"]["cache_tokens"] == {"read": 50, "write": 30}
-    # Total duration covers reasoning/text + tool execution.
-    assert abs(it1["output"]["total_duration_ms"] - (102.2 - 101.1)) < 1e-9
     items = it1["output"]["items"]
     # one text entry + one tool entry
     assert items[0]["type"] == "text"
     assert items[0]["output_tokens"] == 20
-    assert items[0]["reasoning_tokens"] == 10
+    assert "reasoning_tokens" not in items[0]
     # llm duration is text+reasoning range
     assert abs(items[0]["llm_duration_ms"] - (101.8 - 101.1)) < 1e-9
     assert items[1]["type"] == "tool" and items[1]["tool"] == "bash"

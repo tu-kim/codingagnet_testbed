@@ -44,6 +44,34 @@ fi
 
 cmd="${1:-opencode}"
 
+# Render the two views from a single GET response.
+#   $1 session id   $2 workspace dir   $3 sample-info JSON (compact, optional)
+_render_messages() {
+  local session="$1" ws="$2" sample_json="${3:-}"
+  local f
+  f=$(mktemp -t oc-messages-XXXXXX.json)
+  echo
+  echo "==> fetching messages"
+  curl -sS "${auth_args[@]}" \
+    "$OPENCODE_URL/session/$session/message?directory=$ws" \
+    -o "$f"
+  local bytes msgs
+  bytes=$(wc -c <"$f" | tr -d ' ')
+  msgs=$(jq 'length' <"$f" 2>/dev/null || echo '?')
+  echo "    saved=$f  bytes=$bytes  messages=$msgs"
+
+  local sample_args=()
+  [[ -n "$sample_json" ]] && sample_args=(--sample "$sample_json")
+
+  echo
+  echo "==> iteration summary (tokens / durations per LLM round-trip)"
+  "$PY" -m testbed render-iterations -i "$f" "${sample_args[@]}"
+
+  echo
+  echo "==> iteration transcript (raw input / output text per LLM round-trip)"
+  "$PY" -m testbed render-transcript -i "$f" "${sample_args[@]}"
+}
+
 smoke_opencode() {
   : "${MODEL_NAME:?MODEL_NAME required (set in .env or env)}"
 
@@ -69,17 +97,10 @@ smoke_opencode() {
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
     -H 'content-type: application/json' \
     -d "$body" | jq '.info // .'
-  echo
-  echo
-  echo "==> iteration summary (tokens / durations per LLM round-trip)"
-  curl -sS "${auth_args[@]}" \
-    "$OPENCODE_URL/session/$session/message?directory=$ws" \
-    | "$PY" -m testbed render-iterations
-  echo
-  echo "==> iteration transcript (raw input / output text per LLM round-trip)"
-  curl -sS "${auth_args[@]}" \
-    "$OPENCODE_URL/session/$session/message?directory=$ws" \
-    | "$PY" -m testbed render-transcript
+
+  local sample
+  sample=$(jq -nc --arg p "$PROMPT" '{prompt:$p}')
+  _render_messages "$session" "$ws" "$sample"
 }
 
 smoke_dynamo() {
@@ -170,17 +191,13 @@ PY
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
     -H 'content-type: application/json' \
     -d "$body" | jq '.info // .'
-  echo
-  echo
-  echo "==> iteration summary (tokens / durations per LLM round-trip)"
-  curl -sS "${auth_args[@]}" \
-    "$OPENCODE_URL/session/$session/message?directory=$ws" \
-    | "$PY" -m testbed render-iterations
-  echo
-  echo "==> iteration transcript (raw input / output text per LLM round-trip)"
-  curl -sS "${auth_args[@]}" \
-    "$OPENCODE_URL/session/$session/message?directory=$ws" \
-    | "$PY" -m testbed render-transcript
+
+  local sample
+  sample=$(jq -nc --arg id "$instance_id" --arg r "$repo" --arg c "$base_commit" \
+    --argjson seed "$([[ "$SEED_REPO" == "1" ]] && echo true || echo false)" '{
+    instance_id: $id, repo: $r, base_commit: $c, seeded: $seed
+  }')
+  _render_messages "$session" "$ws" "$sample"
 }
 
 case "$cmd" in
