@@ -82,8 +82,14 @@ python -m testbed run \
 
 `results/run_001/`:
 - `trace.jsonl` — task별 raw 레코드 (assistant turns, tool calls, tokens, prefill/decode μs)
+- `iterations.jsonl` — task별 **per-iteration 토큰/시간 분포** (요청 input.roles + output.items{LLM duration / tool duration})
+- `transcripts.jsonl` — task별 **per-iteration raw text trace** (input.messages{role,text} + output.items{reason/text/tool input·output})
 - `summary.json` — 카운트, RTT/prefill/decode/tool 시간 p50·p95
 - `config.json` — 실행 파라미터
+
+`iterations.jsonl` / `transcripts.jsonl`은 모두 `python -m testbed render-iterations` /
+`render-transcript`로도 생성 가능 (OpenCode `GET /session/:id/message` 응답을 stdin으로 입력).
+`scripts/curl_smoke.sh swebench`도 같은 두 view를 즉시 출력합니다.
 
 ## 워커 토폴로지 (`deploy/workers.env`)
 

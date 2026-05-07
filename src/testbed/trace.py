@@ -95,9 +95,14 @@ class TaskRecord:
     prefill_spans: int = 0
     decode_spans: int = 0
     error: str | None = None
+    # Raw OpenCode messages list, kept for downstream views
+    # (build_iteration_summary / build_iteration_transcript). Not serialized
+    # into trace.jsonl to keep that file compact.
+    messages_raw: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     def to_json(self) -> dict[str, Any]:
         d = asdict(self)
+        d.pop("messages_raw", None)
         d["user_messages"] = [asdict(u) for u in self.user_messages]
         d["assistant_turns"] = [asdict(t) for t in self.assistant_turns]
         return d

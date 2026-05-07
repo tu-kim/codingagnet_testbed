@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 
 import click
 
 from .config import Settings
 from . import runner
+from .iterations import build_iteration_summary, build_iteration_transcript
 
 
 @click.group()
@@ -53,6 +55,37 @@ def run(split, num_samples, qps, seed, router, out_dir, provider_id, jaeger_look
 def analyze(run_dir):
     """Print summary.json for a completed run."""
     click.echo((run_dir / "summary.json").read_text())
+
+
+def _read_messages(stream) -> object:
+    raw = stream.read()
+    if not raw.strip():
+        raise click.ClickException("empty input on stdin")
+    return json.loads(raw)
+
+
+@main.command(name="render-iterations")
+@click.option("-i", "--input", "in_path", type=click.Path(exists=True, path_type=Path),
+              default=None, help="Read messages JSON from file (default: stdin)")
+def render_iterations(in_path):
+    """Read OpenCode messages JSON (from GET /session/:id/message) on stdin
+    and emit the per-iteration token / duration distribution view."""
+    messages = (
+        json.loads(in_path.read_text()) if in_path else _read_messages(sys.stdin)
+    )
+    click.echo(json.dumps(build_iteration_summary(messages), indent=2))
+
+
+@main.command(name="render-transcript")
+@click.option("-i", "--input", "in_path", type=click.Path(exists=True, path_type=Path),
+              default=None, help="Read messages JSON from file (default: stdin)")
+def render_transcript(in_path):
+    """Read OpenCode messages JSON on stdin and emit the per-iteration
+    raw input/output text trace."""
+    messages = (
+        json.loads(in_path.read_text()) if in_path else _read_messages(sys.stdin)
+    )
+    click.echo(json.dumps(build_iteration_transcript(messages), indent=2))
 
 
 if __name__ == "__main__":

@@ -34,7 +34,13 @@ if [[ -n "${OPENCODE_SERVER_PASSWORD:-}" ]]; then
   auth_args=(-u "opencode:${OPENCODE_SERVER_PASSWORD}")
 fi
 
-PY="${PYTHON:-python3}"
+if [[ -n "${PYTHON:-}" ]]; then
+  PY="$PYTHON"
+elif [[ -x "$ROOT/.venv/bin/python" ]]; then
+  PY="$ROOT/.venv/bin/python"
+else
+  PY="python3"
+fi
 
 cmd="${1:-opencode}"
 
@@ -64,57 +70,16 @@ smoke_opencode() {
     -H 'content-type: application/json' \
     -d "$body" | jq '.info // .'
   echo
-  echo "==> all messages (full per-step / per-part metadata)"
+  echo
+  echo "==> iteration summary (tokens / durations per LLM round-trip)"
   curl -sS "${auth_args[@]}" \
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
-    | jq '[.[] | {
-        role: .info.role,
-        id: .info.id,
-        time: .info.time,
-        # user-message fields
-        user: (if .info.role == "user" then {
-          agent: .info.agent,
-          model: .info.model,
-          system: .info.system,
-          tools: .info.tools,
-          text: ([.parts[]? | select(.type=="text") | .text] | join(""))
-        } else null end),
-        # assistant-message fields
-        assistant: (if .info.role == "assistant" then {
-          modelID: .info.modelID,
-          providerID: .info.providerID,
-          mode: .info.mode,
-          cost: .info.cost,
-          finish: .info.finish,
-          error: .info.error,
-          tokens: .info.tokens
-        } else null end),
-        parts: [.parts[]? | {
-          type,
-          # tool: command + description + title + status + timing
-          tool: (if .type == "tool" then {
-            name: .tool,
-            callID: .callID,
-            status: .state.status,
-            title: .state.title,
-            input: .state.input,
-            output_preview: (.state.output? | tostring | .[0:300]),
-            error: .state.error,
-            time: .state.time
-          } else null end),
-          # step-finish: per-iteration tokens + cost + reason
-          step_finish: (if .type == "step-finish" then {
-            reason, cost, tokens
-          } else null end),
-          # text / reasoning previews
-          text_preview: (if .type == "text" then (.text // "" | .[0:200]) else null end),
-          reasoning_preview: (if .type == "reasoning" then (.text // "" | .[0:200]) else null end),
-          # other event types
-          patch: (if .type == "patch" then {hash, files} else null end),
-          retry: (if .type == "retry" then {attempt, error} else null end),
-          compaction: (if .type == "compaction" then {auto} else null end)
-        }]
-      }]'
+    | "$PY" -m testbed render-iterations
+  echo
+  echo "==> iteration transcript (raw input / output text per LLM round-trip)"
+  curl -sS "${auth_args[@]}" \
+    "$OPENCODE_URL/session/$session/message?directory=$ws" \
+    | "$PY" -m testbed render-transcript
 }
 
 smoke_dynamo() {
@@ -206,57 +171,16 @@ PY
     -H 'content-type: application/json' \
     -d "$body" | jq '.info // .'
   echo
-  echo "==> all messages (full per-step / per-part metadata)"
+  echo
+  echo "==> iteration summary (tokens / durations per LLM round-trip)"
   curl -sS "${auth_args[@]}" \
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
-    | jq '[.[] | {
-        role: .info.role,
-        id: .info.id,
-        time: .info.time,
-        # user-message fields
-        user: (if .info.role == "user" then {
-          agent: .info.agent,
-          model: .info.model,
-          system: .info.system,
-          tools: .info.tools,
-          text: ([.parts[]? | select(.type=="text") | .text] | join(""))
-        } else null end),
-        # assistant-message fields
-        assistant: (if .info.role == "assistant" then {
-          modelID: .info.modelID,
-          providerID: .info.providerID,
-          mode: .info.mode,
-          cost: .info.cost,
-          finish: .info.finish,
-          error: .info.error,
-          tokens: .info.tokens
-        } else null end),
-        parts: [.parts[]? | {
-          type,
-          # tool: command + description + title + status + timing
-          tool: (if .type == "tool" then {
-            name: .tool,
-            callID: .callID,
-            status: .state.status,
-            title: .state.title,
-            input: .state.input,
-            output_preview: (.state.output? | tostring | .[0:300]),
-            error: .state.error,
-            time: .state.time
-          } else null end),
-          # step-finish: per-iteration tokens + cost + reason
-          step_finish: (if .type == "step-finish" then {
-            reason, cost, tokens
-          } else null end),
-          # text / reasoning previews
-          text_preview: (if .type == "text" then (.text // "" | .[0:200]) else null end),
-          reasoning_preview: (if .type == "reasoning" then (.text // "" | .[0:200]) else null end),
-          # other event types
-          patch: (if .type == "patch" then {hash, files} else null end),
-          retry: (if .type == "retry" then {attempt, error} else null end),
-          compaction: (if .type == "compaction" then {auto} else null end)
-        }]
-      }]'
+    | "$PY" -m testbed render-iterations
+  echo
+  echo "==> iteration transcript (raw input / output text per LLM round-trip)"
+  curl -sS "${auth_args[@]}" \
+    "$OPENCODE_URL/session/$session/message?directory=$ws" \
+    | "$PY" -m testbed render-transcript
 }
 
 case "$cmd" in

@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 
 from .config import Settings
+from .iterations import build_iteration_summary, build_iteration_transcript
 from .jaeger import JaegerClient, aggregate_worker_timing
 from .opencode import OpenCodeClient, gen_traceparent
 from .poisson import arrivals
@@ -73,6 +74,7 @@ async def _run_one(
         # FINAL assistant message. Fetch the full message list so we capture
         # every step of the agent tool loop with its own token usage.
         messages = await oc.list_messages(session_id, directory=workspace)
+        rec.messages_raw = messages
         rec.user_messages = extract_user_messages(messages)
         rec.assistant_turns = extract_assistant_turns(messages)
 
@@ -129,9 +131,26 @@ async def run(
         await oc.close()
         await jg.close()
 
-    with trace_path.open("w") as f:
+    iterations_path = out_dir / "iterations.jsonl"
+    transcripts_path = out_dir / "transcripts.jsonl"
+    with trace_path.open("w") as f_trace, \
+         iterations_path.open("w") as f_iter, \
+         transcripts_path.open("w") as f_tx:
         for rec in results:
-            f.write(json.dumps(rec.to_json()) + "\n")
+            f_trace.write(json.dumps(rec.to_json()) + "\n")
+            sample_info = {
+                "instance_id": rec.instance_id,
+                "session_id": rec.session_id,
+                "trace_id": rec.trace_id,
+            }
+            f_iter.write(
+                json.dumps(build_iteration_summary(rec.messages_raw, sample_info))
+                + "\n"
+            )
+            f_tx.write(
+                json.dumps(build_iteration_transcript(rec.messages_raw, sample_info))
+                + "\n"
+            )
 
     summary = _summarize(results)
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
