@@ -17,6 +17,7 @@ tool ``state.time``).
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Iterator
 
 
@@ -117,10 +118,28 @@ def _user_prompt_text(messages: list[dict]) -> str:
 
 
 def _system_prompt(messages: list[dict]) -> str | None:
+    """Pick the system prompt off the earliest user message that carries one.
+
+    OpenCode's user-message ``info.system`` is typed as ``string[]`` (one
+    entry per system block: agent instructions, tool descriptions, etc.),
+    but older fixtures and some builds use a plain string. Normalize both
+    so transcript consumers always see a single string.
+    """
     for m in messages:
         info = m.get("info", m)
-        if info.get("role") == "user" and info.get("system"):
-            return info["system"]
+        if info.get("role") != "user":
+            continue
+        sys = info.get("system")
+        if not sys:
+            continue
+        if isinstance(sys, (list, tuple)):
+            joined = "\n\n".join(str(s) for s in sys if s)
+            if joined:
+                return joined
+            continue
+        if isinstance(sys, str):
+            return sys
+        return json.dumps(sys)
     return None
 
 
@@ -188,15 +207,23 @@ def build_iteration_summary(
             "session_id": session_id,
             "started_at": all_start,
             "completed_at": all_end,
-            # Wall-clock latency for this iteration (= completed_at - started_at).
-            # Note this is min(starts)..max(ends) over all parts, so it can be
-            # SMALLER than the sum of per-part llm/tool durations whenever the
-            # parts overlap in time (e.g. a tool starts running while the LLM
-            # is still streaming, or two tools execute in parallel within the
-            # same step). It can also be LARGER if there is a gap between the
-            # LLM emission and tool execution (e.g. waiting for I/O), which we
-            # count toward wall-clock but not toward llm_duration_ms or
-            # tool_duration_ms.
+            # Wall-clock latency for this iteration: max(end) - min(start)
+            # over text/reasoning/tool parts inside the step. Each per-part
+            # duration is taken straight from OpenCode's reported timestamps:
+            # text/reasoning use part.time, tool uses state.time. We do NOT
+            # enforce sequencing — sum vs total_latency comparison is just an
+            # arithmetic property of the raw timestamps the provider hands us.
+            #   sum(durations) >  total_latency  → parts whose [start,end]
+            #     intervals overlap (e.g. multiple tools running concurrently
+            #     within the step, or — depending on how OpenCode stamps tool
+            #     state.time.start — a tool whose start is recorded mid-LLM).
+            #   sum(durations) <  total_latency  → there are gaps between
+            #     parts (e.g. wait between LLM emission and tool execution)
+            #     that we count toward wall-clock but not toward any per-part
+            #     duration.
+            # If a tool is still running (state.time.end missing) its
+            # tool_duration_ms is None, and total_latency_ms understates the
+            # iteration since max(end) skips that tool's still-unknown end.
             "total_latency_ms": total_latency,
             "input": {
                 "token_count": tokens.get("input"),

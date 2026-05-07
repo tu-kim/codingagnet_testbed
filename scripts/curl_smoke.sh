@@ -87,16 +87,15 @@ smoke_opencode() {
     -d '{"title":"curl-smoke"}' | jq -r .id)
   echo "session=$session"
 
-  echo "==> send message (model=$MODEL_NAME)"
   local body
   body=$(jq -n --arg m "$MODEL_NAME" --arg p "$PROMPT" '{
     model: {providerID:"local", modelID:$m},
     parts: [{type:"text", text:$p}]
   }')
-  curl -sS "${auth_args[@]}" -X POST \
+  curl -sS -o /dev/null "${auth_args[@]}" -X POST \
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
     -H 'content-type: application/json' \
-    -d "$body" | jq '.info // .'
+    -d "$body"
 
   local sample
   sample=$(jq -nc --arg p "$PROMPT" '{prompt:$p}')
@@ -181,16 +180,15 @@ PY
     -d "{\"title\":\"curl-smoke-$instance_id\"}" | jq -r .id)
   echo "session=$session"
 
-  echo "==> send message (model=$MODEL_NAME)"
   local body
   body=$(jq -n --arg m "$MODEL_NAME" --arg p "$prompt" '{
     model: {providerID:"local", modelID:$m},
     parts: [{type:"text", text:$p}]
   }')
-  curl -sS "${auth_args[@]}" -X POST \
+  curl -sS -o /dev/null "${auth_args[@]}" -X POST \
     "$OPENCODE_URL/session/$session/message?directory=$ws" \
     -H 'content-type: application/json' \
-    -d "$body" | jq '.info // .'
+    -d "$body"
 
   local sample
   sample=$(jq -nc --arg id "$instance_id" --arg r "$repo" --arg c "$base_commit" \

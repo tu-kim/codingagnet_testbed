@@ -114,3 +114,19 @@ def test_transcript_emits_input_messages_and_output_items():
     in2 = its[1]["input"]["messages"]
     assert {"role": "assistant", "text": "Running ls."} in in2
     assert {"role": "tool", "text": "a.py b.py"} in in2
+
+
+def test_transcript_normalizes_list_system_prompt():
+    """OpenCode's user-message info.system is typed string[]; transcript
+    must surface it as a single joined string, not a Python list."""
+    payload = _payload()
+    payload[0]["info"]["system"] = [
+        "You are a coding agent.",
+        "Available tools: bash, edit.",
+    ]
+    out = build_iteration_transcript(payload)
+    msg0 = out["iterations"][0]["input"]["messages"][0]
+    assert msg0 == {
+        "role": "system",
+        "text": "You are a coding agent.\n\nAvailable tools: bash, edit.",
+    }
