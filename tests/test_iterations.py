@@ -68,17 +68,26 @@ def test_summary_has_two_iterations_with_tokens_and_durations():
     assert it1["input"]["token_count"] == 100
     # First step sees just system + user.
     assert it1["input"]["roles"] == ["system", "user"]
-    # total_latency_ms is now at iteration level (= completed - started).
-    assert abs(it1["total_latency_ms"] - (102.2 - 101.1)) < 1e-9
+    # iteration window covers earliest part start to latest part end
+    assert it1["started_at"] == 101.1
+    assert it1["completed_at"] == 102.2
+    # No derived total_latency_ms — durations are derivable from per-item
+    # started_at/completed_at if needed.
+    assert "total_latency_ms" not in it1
+    assert "total_duration_ms" not in it1.get("output", {})
     assert it1["output"]["cache_tokens"] == {"read": 50, "write": 30}
     items = it1["output"]["items"]
-    # one text entry + one tool entry
+    # one text entry + one tool entry; each carries raw start/end + derived duration
     assert items[0]["type"] == "text"
     assert items[0]["output_tokens"] == 20
     assert "reasoning_tokens" not in items[0]
-    # llm duration is text+reasoning range
+    # text item span is text+reasoning min/max
+    assert items[0]["started_at"] == 101.1
+    assert items[0]["completed_at"] == 101.8
     assert abs(items[0]["llm_duration_ms"] - (101.8 - 101.1)) < 1e-9
     assert items[1]["type"] == "tool" and items[1]["tool"] == "bash"
+    assert items[1]["started_at"] == 101.8
+    assert items[1]["completed_at"] == 102.2
     assert abs(items[1]["tool_duration_ms"] - 0.4) < 1e-9
 
 

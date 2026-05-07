@@ -174,7 +174,6 @@ def build_iteration_summary(
         text_start, text_end = _time_range(step_parts, ("text", "reasoning"))
         all_start, all_end = _time_range(step_parts, ("text", "reasoning", "tool"))
         llm_duration = (text_end - text_start) if (text_start is not None and text_end is not None) else None
-        total_latency = (all_end - all_start) if (all_start is not None and all_end is not None) else None
 
         items: list[dict] = []
         # One LLM emission entry per step (text + reasoning collapsed).
@@ -186,6 +185,8 @@ def build_iteration_summary(
         items.append({
             "type": "text",
             "output_tokens": tokens.get("output"),
+            "started_at": text_start,
+            "completed_at": text_end,
             "llm_duration_ms": llm_duration,
         })
         # One entry per tool call
@@ -198,6 +199,8 @@ def build_iteration_summary(
             items.append({
                 "type": "tool",
                 "tool": p.get("tool"),
+                "started_at": t.get("start"),
+                "completed_at": t.get("end"),
                 "tool_duration_ms": dur,
             })
 
@@ -207,24 +210,6 @@ def build_iteration_summary(
             "session_id": session_id,
             "started_at": all_start,
             "completed_at": all_end,
-            # Wall-clock latency for this iteration: max(end) - min(start)
-            # over text/reasoning/tool parts inside the step. Each per-part
-            # duration is taken straight from OpenCode's reported timestamps:
-            # text/reasoning use part.time, tool uses state.time. We do NOT
-            # enforce sequencing — sum vs total_latency comparison is just an
-            # arithmetic property of the raw timestamps the provider hands us.
-            #   sum(durations) >  total_latency  → parts whose [start,end]
-            #     intervals overlap (e.g. multiple tools running concurrently
-            #     within the step, or — depending on how OpenCode stamps tool
-            #     state.time.start — a tool whose start is recorded mid-LLM).
-            #   sum(durations) <  total_latency  → there are gaps between
-            #     parts (e.g. wait between LLM emission and tool execution)
-            #     that we count toward wall-clock but not toward any per-part
-            #     duration.
-            # If a tool is still running (state.time.end missing) its
-            # tool_duration_ms is None, and total_latency_ms understates the
-            # iteration since max(end) skips that tool's still-unknown end.
-            "total_latency_ms": total_latency,
             "input": {
                 "token_count": tokens.get("input"),
                 "roles": _conversation_roles(steps, idx),
